@@ -1,11 +1,9 @@
 trigger:
-- master
+  branches:
+    include:
+      - master
 
 stages:
-
-# =========================
-# Stage 1: Build
-# =========================
 - stage: Build
   displayName: "Build Node.js App"
   jobs:
@@ -13,28 +11,22 @@ stages:
     displayName: "Install & Package Express App"
     pool:
       vmImage: "ubuntu-latest"
-
     steps:
-    - checkout: self
-
-    # Install Node.js
     - task: NodeTool@0
       inputs:
         versionSpec: "18.x"
       displayName: "Install Node.js"
 
-    # Install dependencies
     - script: |
-        npm install
+        echo "Installing npm packages (dev included for build)..."
+        npm ci
       displayName: "Install npm packages"
 
-    # List files (optional debugging)
     - script: |
-        echo "Listing workspace:"
+        echo "Listing workspace files for debugging..."
         ls -lh
       displayName: "Debug: List files"
 
-    # Zip the app
     - task: ArchiveFiles@2
       inputs:
         rootFolderOrFile: "$(Build.SourcesDirectory)"
@@ -43,56 +35,49 @@ stages:
         archiveFile: "$(Build.ArtifactStagingDirectory)/express-app.zip"
       displayName: "Archive Node.js application"
 
-    # Publish artifact
     - task: PublishPipelineArtifact@1
       inputs:
         targetPath: "$(Build.ArtifactStagingDirectory)"
         artifactName: "nodeapp"
       displayName: "Publish artifact for deployment"
 
-
-# =========================
-# Stage 2: Deploy
-# =========================
 - stage: Deploy
   displayName: "Deploy to Remote Server"
-  dependsOn: Build
+  dependsOn:
+  - Build
   jobs:
   - job: DeployJob
     displayName: "Deploy Express App"
     pool:
-      name: "Java_Deployment"   # Your agent pool name
-
+      name: "Java_Deployment"
     steps:
-
-    # Download build artifact from Stage 1
-    - download: current
-      artifact: "nodeapp"
+    - task: DownloadPipelineArtifact@2
+      inputs:
+        artifact: "nodeapp"
+        path: "$(Pipeline.Workspace)/nodeapp"
       displayName: "Download build artifact"
 
-    # Copy zip file to remote server
     - task: CopyFilesOverSSH@0
       inputs:
-        sshEndpoint: "Java_YAML"  # Your SSH service connection name
+        sshEndpoint: "Java_YAML"
         sourceFolder: "$(Pipeline.Workspace)/nodeapp"
         contents: "express-app.zip"
         targetFolder: "/home/itadmin/nodeapp"
       displayName: "Copy artifact to remote server"
 
-    # Deploy and restart Node.js app
     - task: SSH@0
       inputs:
         sshEndpoint: "Java_YAML"
         runOptions: "inline"
         inline: |
-          echo "Unzipping application..."
+          echo "Preparing deployment folder..."
           mkdir -p /home/itadmin/nodeapp
           unzip -o /home/itadmin/nodeapp/express-app.zip -d /home/itadmin/nodeapp
 
           cd /home/itadmin/nodeapp
 
           echo "Installing production dependencies..."
-          npm install --production
+          npm ci --omit=dev
 
           echo "Restarting PM2 process..."
           pm2 restart expressapp || pm2 start app.js --name expressapp
