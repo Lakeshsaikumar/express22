@@ -18,9 +18,9 @@ stages:
       displayName: "Install Node.js"
 
     - script: |
-        echo "Installing npm packages (dev included for build)..."
-        npm ci
-      displayName: "Install npm packages"
+        echo "Installing npm packages for build..."
+        npm install
+      displayName: "Install npm packages (build)"
 
     - script: |
         echo "Listing workspace files for debugging..."
@@ -77,7 +77,7 @@ stages:
           cd /home/itadmin/nodeapp
 
           echo "Installing production dependencies..."
-          npm ci --omit=dev
+          npm install --omit=dev
 
           echo "Restarting PM2 process..."
           pm2 restart expressapp || pm2 start app.js --name expressapp
