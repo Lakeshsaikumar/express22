@@ -76,11 +76,26 @@ stages:
 
           cd /home/itadmin/nodeapp
 
+          echo "Cleaning old node_modules..."
+          rm -rf node_modules
+
           echo "Installing production dependencies..."
           npm install --omit=dev
 
+          echo "Ensuring PM2 log rotation is enabled..."
+          pm2 install pm2-logrotate || echo "pm2-logrotate already installed"
+          pm2 set pm2-logrotate:max_size 10M
+          pm2 set pm2-logrotate:retain 10
+
           echo "Restarting PM2 process..."
           pm2 restart expressapp || pm2 start app.js --name expressapp
+
+          echo "Performing basic health check..."
+          if curl -fs http://localhost:3000/health > /dev/null; then
+            echo "Health check passed!"
+          else
+            echo "Health check failed!"
+          fi
 
           echo "Deployment Complete!"
       displayName: "Deploy & restart Node.js app"
